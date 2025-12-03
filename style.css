@@ -138,8 +138,9 @@ section {
     box-shadow: 0 .2rem .5rem var(--shadow-color);
     font-size: 2rem;
     color: var(--main-color);
-    margin: 1.5rem 1.5rem 3rem 0;
+    margin: 1.5rem 1.5rem 3rem 2rem;
     transition: .5s ease;
+    
 }
 
 .home-content .social-media a img.leetcode-icon {
