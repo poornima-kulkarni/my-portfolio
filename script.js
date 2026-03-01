@@ -1,400 +1,328 @@
-// ===================================
-// Navigation Functionality
-// ===================================
+/**
+ * Portfolio Script — Aryan Mehta
+ * - Dark/Light theme toggle (persisted in localStorage)
+ * - Custom cursor (desktop)
+ * - Mobile nav toggle
+ * - Nav scroll behaviour
+ * - Scroll reveal (IntersectionObserver)
+ * - Counter animation
+ * - Contact form validation
+ * - Project card 3-D tilt
+ * - Skill tag ripple
+ */
 
-const navbar = document.getElementById("navbar")
-const menuToggle = document.getElementById("menuToggle")
-const navMenu = document.getElementById("navMenu")
-const navLinks = document.querySelectorAll(".nav-link")
+'use strict';
 
-// Sticky navbar on scroll
-let lastScroll = 0
+/* ====================================================
+   THEME TOGGLE
+   ==================================================== */
+(function initTheme() {
+  const html       = document.documentElement;
+  const btn        = document.getElementById('themeToggle');
+  const STORAGE_KEY = 'portfolio-theme';
 
-window.addEventListener("scroll", () => {
-  const currentScroll = window.pageYOffset
+  // Load saved preference (fallback: light)
+  const saved = localStorage.getItem(STORAGE_KEY) || 'light';
+  html.setAttribute('data-theme', saved);
 
-  // Add shadow when scrolled
-  if (currentScroll > 50) {
-    navbar.classList.add("scrolled")
-  } else {
-    navbar.classList.remove("scrolled")
+  function applyTheme(theme) {
+    html.setAttribute('data-theme', theme);
+    try { localStorage.setItem(STORAGE_KEY, theme); } catch(e) {}
   }
 
-  lastScroll = currentScroll
-})
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const current = html.getAttribute('data-theme');
+      const next    = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      // Quick rotation animation on button
+      btn.style.transform = 'rotate(360deg)';
+      setTimeout(() => { btn.style.transform = ''; }, 400);
+    });
+  }
+})();
 
-// Mobile menu toggle
-menuToggle.addEventListener("click", () => {
-  menuToggle.classList.toggle("active")
-  navMenu.classList.toggle("active")
-  document.body.style.overflow = navMenu.classList.contains("active") ? "hidden" : "auto"
-})
 
-// Close mobile menu when clicking on a link
-navLinks.forEach((link) => {
-  link.addEventListener("click", () => {
-    menuToggle.classList.remove("active")
-    navMenu.classList.remove("active")
-    document.body.style.overflow = "auto"
-  })
-})
+/* ====================================================
+   CUSTOM CURSOR  (desktop only)
+   ==================================================== */
+(function initCursor() {
+  const cursor    = document.getElementById('cursor');
+  const cursorDot = document.getElementById('cursorDot');
+  if (!cursor || !cursorDot) return;
 
-// Active link highlighting based on scroll position
-function setActiveLink() {
-  const sections = document.querySelectorAll("section")
-  const scrollPosition = window.pageYOffset + 100
+  let targetX = -200, targetY = -200;
+  let ringX   = -200, ringY   = -200;
 
-  sections.forEach((section) => {
-    const sectionTop = section.offsetTop
-    const sectionHeight = section.offsetHeight
-    const sectionId = section.getAttribute("id")
+  // Raw mouse → dot snaps immediately, ring lerps
+  document.addEventListener('mousemove', e => {
+    targetX = e.clientX;
+    targetY = e.clientY;
+    cursorDot.style.left = targetX + 'px';
+    cursorDot.style.top  = targetY + 'px';
+  });
 
-    if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) {
-      navLinks.forEach((link) => {
-        link.classList.remove("active")
-        if (link.getAttribute("href") === `#${sectionId}`) {
-          link.classList.add("active")
-        }
-      })
-    }
-  })
-}
+  (function animateRing() {
+    ringX += (targetX - ringX) * 0.13;
+    ringY += (targetY - ringY) * 0.13;
+    cursor.style.left = ringX + 'px';
+    cursor.style.top  = ringY + 'px';
+    requestAnimationFrame(animateRing);
+  })();
 
-window.addEventListener("scroll", setActiveLink)
+  // Hover expand
+  const hoverEls = document.querySelectorAll(
+    'a, button, .tag, .project-card, .skill-category, .about-stat-card, input, textarea, .social-link'
+  );
+  hoverEls.forEach(el => {
+    el.addEventListener('mouseenter', () => cursor.classList.add('hovering'));
+    el.addEventListener('mouseleave', () => cursor.classList.remove('hovering'));
+  });
 
-// ===================================
-// Smooth Scroll for Navigation Links
-// ===================================
+  document.addEventListener('mousedown', () => cursor.classList.add('clicking'));
+  document.addEventListener('mouseup',   () => cursor.classList.remove('clicking'));
+  document.addEventListener('mouseleave',() => { cursor.style.opacity = '0'; cursorDot.style.opacity = '0'; });
+  document.addEventListener('mouseenter',() => { cursor.style.opacity = '1'; cursorDot.style.opacity = '1'; });
+})();
 
-navLinks.forEach((link) => {
-  link.addEventListener("click", (e) => {
-    e.preventDefault()
-    const targetId = link.getAttribute("href")
-    const targetSection = document.querySelector(targetId)
 
-    if (targetSection) {
-      const offsetTop = targetSection.offsetTop - 70 // Account for fixed navbar
-      window.scrollTo({
-        top: offsetTop,
-        behavior: "smooth",
-      })
-    }
-  })
-})
+/* ====================================================
+   NAVIGATION — scroll & mobile toggle
+   ==================================================== */
+(function initNav() {
+  const nav      = document.getElementById('mainNav');
+  const toggle   = document.getElementById('navToggle');
+  const navLinks = document.getElementById('navLinks');
+  const links    = navLinks ? navLinks.querySelectorAll('.nav-link') : [];
 
-// ===================================
-// Scroll Animations (Intersection Observer)
-// ===================================
+  // Scroll behaviour
+  let lastScroll = 0;
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    if (y > 40) nav.classList.add('scrolled');
+    else        nav.classList.remove('scrolled');
+    lastScroll = y;
+  }, { passive: true });
 
-const observerOptions = {
-  threshold: 0.1,
-  rootMargin: "0px 0px -50px 0px",
-}
+  if (!toggle || !navLinks) return;
 
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach((entry) => {
-    if (entry.isIntersecting) {
-      entry.target.style.opacity = "1"
-      entry.target.style.transform = "translateY(0)"
-    }
-  })
-}, observerOptions)
+  // Open / close mobile menu
+  function openMenu(open) {
+    navLinks.classList.toggle('open', open);
+    toggle.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+  }
 
-// Observe all section elements for fade-in animation
-document.addEventListener("DOMContentLoaded", () => {
-  const sections = document.querySelectorAll("section")
-  sections.forEach((section) => {
-    section.style.opacity = "0"
-    section.style.transform = "translateY(20px)"
-    section.style.transition = "opacity 0.6s ease, transform 0.6s ease"
-    observer.observe(section)
-  })
-})
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openMenu(!navLinks.classList.contains('open'));
+  });
 
-// ===================================
-// Skills Progress Bar Animation
-// ===================================
+  // Close on link click
+  links.forEach(link => link.addEventListener('click', () => openMenu(false)));
 
-const skillsSection = document.querySelector(".skills")
-let skillsAnimated = false
+  // Close on outside tap / click
+  document.addEventListener('click', e => {
+    if (!nav.contains(e.target)) openMenu(false);
+  });
 
-const animateSkills = () => {
-  const skillBars = document.querySelectorAll(".skill-progress")
+  // Close on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') openMenu(false);
+  });
+})();
 
-  skillBars.forEach((bar) => {
-    const width = bar.style.width
-    bar.style.width = "0"
+
+/* ====================================================
+   SCROLL REVEAL — IntersectionObserver
+   ==================================================== */
+(function initReveal() {
+  const els = document.querySelectorAll('.reveal');
+  if (!els.length) return;
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      // Stagger siblings in same parent
+      const siblings = [...entry.target.parentElement.children]
+        .filter(c => c.classList.contains('reveal') && !c.classList.contains('visible'));
+      const idx = siblings.indexOf(entry.target);
+      entry.target.style.transitionDelay = Math.max(idx * 0.09, 0) + 's';
+      entry.target.classList.add('visible');
+      io.unobserve(entry.target);
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  els.forEach(el => io.observe(el));
+})();
+
+
+/* ====================================================
+   COUNTER ANIMATION
+   ==================================================== */
+(function initCounters() {
+  const nums = document.querySelectorAll('.stat-num[data-count]');
+  if (!nums.length) return;
+
+  function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const el     = entry.target;
+      const target = parseInt(el.getAttribute('data-count'), 10);
+      const dur    = 1500;
+      const start  = performance.now();
+
+      (function step(now) {
+        const p = Math.min((now - start) / dur, 1);
+        el.textContent = Math.round(easeOutQuart(p) * target);
+        if (p < 1) requestAnimationFrame(step);
+        else el.textContent = target;
+      })(start);
+
+      io.unobserve(el);
+    });
+  }, { threshold: 0.6 });
+
+  nums.forEach(el => io.observe(el));
+})();
+
+
+/* ====================================================
+   CONTACT FORM VALIDATION
+   ==================================================== */
+(function initForm() {
+  const form         = document.getElementById('contactForm');
+  if (!form) return;
+
+  const nameInput    = document.getElementById('fname');
+  const emailInput   = document.getElementById('femail');
+  const msgInput     = document.getElementById('fmessage');
+  const nameErr      = document.getElementById('nameError');
+  const emailErr     = document.getElementById('emailError');
+  const msgErr       = document.getElementById('messageError');
+  const successMsg   = document.getElementById('formSuccess');
+
+  function setErr(input, el, msg) {
+    input.classList.add('error');
+    if (el) el.textContent = msg;
+  }
+  function clrErr(input, el) {
+    input.classList.remove('error');
+    if (el) el.textContent = '';
+  }
+  function validEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+  // Live clear
+  nameInput.addEventListener('input',  () => clrErr(nameInput, nameErr));
+  emailInput.addEventListener('input', () => clrErr(emailInput, emailErr));
+  msgInput.addEventListener('input',   () => clrErr(msgInput, msgErr));
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    let ok = true;
+    clrErr(nameInput, nameErr); clrErr(emailInput, emailErr); clrErr(msgInput, msgErr);
+    if (successMsg) successMsg.textContent = '';
+
+    if (nameInput.value.trim().length < 2)     { setErr(nameInput, nameErr, 'Please enter your name.'); ok = false; }
+    if (!validEmail(emailInput.value.trim()))   { setErr(emailInput, emailErr, 'Please enter a valid email.'); ok = false; }
+    if (msgInput.value.trim().length < 10)      { setErr(msgInput, msgErr, 'Message too short (min 10 chars).'); ok = false; }
+    if (!ok) return;
+
+    const btn = form.querySelector('button[type="submit"]');
+    const orig = btn.textContent;
+    btn.textContent = 'Sending…';
+    btn.disabled = true;
 
     setTimeout(() => {
-      bar.style.width = width
-    }, 100)
-  })
+      if (successMsg) successMsg.textContent = '✓ Message received! I\'ll be in touch soon.';
+      form.reset();
+      btn.textContent = orig;
+      btn.disabled = false;
+    }, 1400);
+  });
+})();
 
-  skillsAnimated = true
-}
 
-const skillsObserver = new IntersectionObserver(
-  (entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting && !skillsAnimated) {
-        animateSkills()
-      }
-    })
-  },
-  { threshold: 0.3 },
-)
+/* ====================================================
+   PROJECT CARD 3-D TILT
+   ==================================================== */
+(function initTilt() {
+  document.querySelectorAll('.project-card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const r  = card.getBoundingClientRect();
+      const x  = e.clientX - r.left - r.width  / 2;
+      const y  = e.clientY - r.top  - r.height / 2;
+      const rX = (y / (r.height / 2)) * -5;
+      const rY = (x / (r.width  / 2)) *  5;
+      card.style.transform  = `translateY(-8px) rotateX(${rX}deg) rotateY(${rY}deg)`;
+      card.style.transition = 'transform .08s linear';
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform  = '';
+      card.style.transition = 'transform .4s ease, box-shadow .35s';
+    });
+  });
+})();
 
-if (skillsSection) {
-  skillsObserver.observe(skillsSection)
-}
 
-// ===================================
-// Contact Form Validation & Submission
-// ===================================
+/* ====================================================
+   SKILL TAG RIPPLE
+   ==================================================== */
+(function initRipple() {
+  // Inject keyframes once
+  const style = document.createElement('style');
+  style.textContent = '@keyframes ripple{to{transform:scale(1.8);opacity:0;}}';
+  document.head.appendChild(style);
 
-const contactForm = document.getElementById("contactForm")
-const formInputs = {
-  name: document.getElementById("name"),
-  email: document.getElementById("email"),
-  subject: document.getElementById("subject"),
-  message: document.getElementById("message"),
-}
-const formErrors = {
-  name: document.getElementById("nameError"),
-  email: document.getElementById("emailError"),
-  subject: document.getElementById("subjectError"),
-  message: document.getElementById("messageError"),
-}
-const formSuccess = document.getElementById("formSuccess")
+  document.querySelectorAll('.tag').forEach(tag => {
+    tag.addEventListener('click', e => {
+      const r      = tag.getBoundingClientRect();
+      const size   = Math.max(r.width, r.height) * 1.4;
+      const ripple = document.createElement('span');
+      ripple.style.cssText = `
+        position:absolute; border-radius:50%; pointer-events:none;
+        width:${size}px; height:${size}px;
+        left:${e.clientX - r.left - size/2}px;
+        top:${e.clientY - r.top  - size/2}px;
+        background:rgba(122,158,135,0.3);
+        transform:scale(0); animation:ripple .5s ease-out forwards;
+      `;
+      tag.style.position = 'relative';
+      tag.style.overflow = 'hidden';
+      tag.appendChild(ripple);
+      ripple.addEventListener('animationend', () => ripple.remove());
+    });
+  });
+})();
 
-// Email validation regex
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-// Validation functions
-function validateName(name) {
-  if (name.trim().length < 2) {
-    return "Name must be at least 2 characters long"
-  }
-  return ""
-}
+/* ====================================================
+   SMOOTH ANCHOR SCROLL (polyfill for older browsers)
+   ==================================================== */
+(function initSmoothScroll() {
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+      const id  = this.getAttribute('href');
+      if (id === '#') return;
+      const el  = document.querySelector(id);
+      if (!el) return;
+      e.preventDefault();
+      const top = el.getBoundingClientRect().top + window.scrollY - (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 70);
+      window.scrollTo({ top, behavior: 'smooth' });
+    });
+  });
+})();
 
-function validateEmail(email) {
-  if (!emailRegex.test(email)) {
-    return "Please enter a valid email address"
-  }
-  return ""
-}
 
-function validateSubject(subject) {
-  if (subject.trim().length < 3) {
-    return "Subject must be at least 3 characters long"
-  }
-  return ""
-}
-
-function validateMessage(message) {
-  if (message.trim().length < 10) {
-    return "Message must be at least 10 characters long"
-  }
-  return ""
-}
-
-// Real-time validation
-formInputs.name.addEventListener("blur", () => {
-  const error = validateName(formInputs.name.value)
-  formErrors.name.textContent = error
-  formInputs.name.style.borderColor = error ? "#ef4444" : ""
-})
-
-formInputs.email.addEventListener("blur", () => {
-  const error = validateEmail(formInputs.email.value)
-  formErrors.email.textContent = error
-  formInputs.email.style.borderColor = error ? "#ef4444" : ""
-})
-
-formInputs.subject.addEventListener("blur", () => {
-  const error = validateSubject(formInputs.subject.value)
-  formErrors.subject.textContent = error
-  formInputs.subject.style.borderColor = error ? "#ef4444" : ""
-})
-
-formInputs.message.addEventListener("blur", () => {
-  const error = validateMessage(formInputs.message.value)
-  formErrors.message.textContent = error
-  formInputs.message.style.borderColor = error ? "#ef4444" : ""
-})
-
-// Clear error on input
-Object.keys(formInputs).forEach((key) => {
-  formInputs[key].addEventListener("input", () => {
-    formErrors[key].textContent = ""
-    formInputs[key].style.borderColor = ""
-  })
-})
-
-// Form submission
-contactForm.addEventListener("submit", (e) => {
-  e.preventDefault()
-
-  // Validate all fields
-  const errors = {
-    name: validateName(formInputs.name.value),
-    email: validateEmail(formInputs.email.value),
-    subject: validateSubject(formInputs.subject.value),
-    message: validateMessage(formInputs.message.value),
-  }
-
-  // Display errors
-  let hasErrors = false
-  Object.keys(errors).forEach((key) => {
-    if (errors[key]) {
-      formErrors[key].textContent = errors[key]
-      formInputs[key].style.borderColor = "#ef4444"
-      hasErrors = true
-    }
-  })
-
-  // If no errors, submit form (simulated)
-  if (!hasErrors) {
-    // Simulate form submission
-    const submitButton = contactForm.querySelector('button[type="submit"]')
-    const originalText = submitButton.textContent
-    submitButton.textContent = "Sending..."
-    submitButton.disabled = true
-
-    // Simulate API call
-    setTimeout(() => {
-      // Show success message
-      formSuccess.classList.add("show")
-
-      // Reset form
-      contactForm.reset()
-      submitButton.textContent = originalText
-      submitButton.disabled = false
-
-      // Hide success message after 5 seconds
-      setTimeout(() => {
-        formSuccess.classList.remove("show")
-      }, 5000)
-
-      // In a real application, you would send the data to a server here:
-      // const formData = {
-      //     name: formInputs.name.value,
-      //     email: formInputs.email.value,
-      //     subject: formInputs.subject.value,
-      //     message: formInputs.message.value
-      // };
-      // fetch('/api/contact', {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify(formData)
-      // });
-    }, 1500)
-  }
-})
-
-// ===================================
-// Dynamic Year in Footer
-// ===================================
-
-const yearElement = document.querySelector(".footer-content p")
-if (yearElement) {
-  const currentYear = new Date().getFullYear()
-  yearElement.textContent = `© ${currentYear} Poornima Kulkarni. All rights reserved.`
-}
-
-// ===================================
-// Scroll to Top Button (Optional Enhancement)
-// ===================================
-
-// Create scroll to top button dynamically
-const scrollTopBtn = document.createElement("button")
-scrollTopBtn.innerHTML = "↑"
-scrollTopBtn.className = "scroll-top-btn"
-scrollTopBtn.setAttribute("aria-label", "Scroll to top")
-document.body.appendChild(scrollTopBtn)
-
-// Add styles for scroll to top button
-const scrollTopStyles = `
-    .scroll-top-btn {
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        width: 50px;
-        height: 50px;
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        font-size: 1.5rem;
-        cursor: pointer;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease;
-        box-shadow: var(--shadow-lg);
-        z-index: 999;
-    }
-    
-    .scroll-top-btn.visible {
-        opacity: 1;
-        visibility: visible;
-    }
-    
-    .scroll-top-btn:hover {
-        background: var(--primary-dark);
-        transform: translateY(-3px);
-    }
-    
-    @media (max-width: 768px) {
-        .scroll-top-btn {
-            bottom: 20px;
-            right: 20px;
-            width: 45px;
-            height: 45px;
-        }
-    }
-`
-
-const styleSheet = document.createElement("style")
-styleSheet.textContent = scrollTopStyles
-document.head.appendChild(styleSheet)
-
-// Show/hide scroll to top button
-window.addEventListener("scroll", () => {
-  if (window.pageYOffset > 300) {
-    scrollTopBtn.classList.add("visible")
-  } else {
-    scrollTopBtn.classList.remove("visible")
-  }
-})
-
-// Scroll to top functionality
-scrollTopBtn.addEventListener("click", () => {
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth",
-  })
-})
-
-// ===================================
-// Project Card Hover Effects Enhancement
-// ===================================
-
-const projectCards = document.querySelectorAll(".project-card")
-
-projectCards.forEach((card) => {
-  card.addEventListener("mouseenter", function () {
-    this.style.transform = "translateY(-10px)"
-  })
-
-  card.addEventListener("mouseleave", function () {
-    this.style.transform = "translateY(0)"
-  })
-})
-
-// ===================================
-// Console Welcome Message
-// ===================================
-
-console.log("%c👋 Welcome to my portfolio!", "color: #2563eb; font-size: 20px; font-weight: bold;")
-console.log("%cInterested in the code? Check out the repository!", "color: #64748b; font-size: 14px;")
+/* ====================================================
+   TITLE SEP BLINK (tiny hero detail)
+   ==================================================== */
+(function() {
+  const sep = document.querySelector('.title-sep');
+  if (!sep) return;
+  setInterval(() => {
+    sep.style.opacity = sep.style.opacity === '0.1' ? '0.4' : '0.1';
+  }, 900);
+})();
